@@ -5,5 +5,5 @@
 
 ## Installation
 ```bash
-go get github.com/doraemonkeys/fast-mpmc
+go get github.com/doraemonkeys/ggcache
 ```
