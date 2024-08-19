@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var _ Cacher[int, int] = &SimpleCache[int, int]{}
+
 // SimpleCache has no clear priority for evict cache. It depends on key-value map order.
 type SimpleCache[K comparable, V any] struct {
 	baseCache[K, V]

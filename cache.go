@@ -32,22 +32,22 @@ type Cacher[K comparable, V any] interface {
 
 	// GetOrReload returns the value for the specified key if it is present in the cache.
 	// If the key is not present in the cache, it loads the value by invoking the loader function or wa
-	GetOrReload(key K, loader LoaderExpireFunc[K, V]) (V, error)
+	GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error)
 
 	// GetAll returns a slice containing all key-value pairs in the cache.
-	GetAll(checkExpired bool) ([]K, []V)
+	GetAll() ([]K, []V)
 	// GetAllMap returns a map containing all key-value pairs in the cache.
-	GetAllMap(checkExpired bool) map[K]V
+	GetAllMap() map[K]V
 
 	// Remove removes the specified key from the cache if the key is present.
 	// Returns true if the key was present and the key has been deleted.
-	Remove(key K) bool
+	Remove(key K) (V, bool)
 	// Purge removes all key-value pairs from the cache.
 	Purge()
 	// Keys returns a slice containing all keys in the cache.
-	Keys(checkExpired bool) []K
+	Keys() []K
 	// Len returns the number of items in the cache.
-	Len(checkExpired bool) int
+	Len() int
 	// Has returns true if the key exists in the cache.
 	Has(key K) bool
 
@@ -96,7 +96,7 @@ func NewBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCach
 		stats:            &stats{},
 		loadGroup:        NewGroup[K, *CacheValue[V]](),
 		clock:            NewRealClock(),
-		expireQueue:      pq.New(cacheItemExpireLessTODO[K, K, V, V]),
+		expireQueue:      pq.New(cacheItemExpireLessT[K, K, V, V]),
 		removeExpireKeys: removeKeys,
 		tickerDuraton:    time.Second * 3,
 	}
@@ -177,23 +177,24 @@ type CacheItem[K comparable, V any] struct {
 	*CacheValue[V]
 }
 
-func cacheItemExpireLess[K1 comparable, K2 comparable, V1, V2 any](a CacheItem[K1, V1], b CacheItem[K2, V2]) int {
-	if a.expireAt == nil && b.expireAt == nil {
-		return 0
-	}
+func cacheItemExpireCompare[K1 comparable, K2 comparable, V1, V2 any](a CacheItem[K1, V1], b CacheItem[K2, V2]) int {
 	if a.expireAt == nil {
-		return 1
-	}
-	if b.expireAt == nil {
+		if b.expireAt != nil {
+			return 1
+		}
+		return 0
+	} else if b.expireAt == nil {
 		return -1
 	}
 	if a.expireAt.After(*b.expireAt) {
 		return 1
-	} else {
+	} else if a.expireAt.Before(*b.expireAt) {
 		return -1
+	} else {
+		return 0
 	}
 }
 
-func cacheItemExpireLessTODO[K1 comparable, K2 comparable, V1, V2 any](a CacheItem[K1, V1], b CacheItem[K2, V2]) bool {
-	return cacheItemExpireLess(a, b) < 0
+func cacheItemExpireLessT[K1 comparable, K2 comparable, V1, V2 any](a CacheItem[K1, V1], b CacheItem[K2, V2]) bool {
+	return cacheItemExpireCompare(a, b) < 0
 }
