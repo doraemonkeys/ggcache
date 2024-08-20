@@ -66,7 +66,7 @@ const (
 	TYPE_ARC    CacheType = "arc"
 )
 
-type baseCache[K comparable, V any] struct {
+type BaseCache[K comparable, V any] struct {
 
 	// loaderExpireFunc LoaderExpireFunc[K, V]
 
@@ -91,8 +91,8 @@ type baseCache[K comparable, V any] struct {
 	*stats
 }
 
-func newBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCache[K, V] {
-	return &baseCache[K, V]{
+func newBaseCache[K comparable, V any](size int, removeKeys func([]K)) *BaseCache[K, V] {
+	return &BaseCache[K, V]{
 		size:             size,
 		stats:            &stats{},
 		loadGroup:        NewGroup[K, *CacheValue[V]](),
@@ -103,17 +103,17 @@ func newBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCach
 	}
 }
 
-func (c *baseCache[K, V]) withClock(clock Clock) *baseCache[K, V] {
+func (c *BaseCache[K, V]) withClock(clock Clock) *BaseCache[K, V] {
 	c.clock = clock
 	return c
 }
 
-func (c *baseCache[K, V]) withTickerDuration(d time.Duration) *baseCache[K, V] {
+func (c *BaseCache[K, V]) withTickerDuration(d time.Duration) *BaseCache[K, V] {
 	c.tickerDuraton = d
 	return c
 }
 
-func (c *baseCache[K, V]) pushExpire(key K, val *CacheValue[V]) {
+func (c *BaseCache[K, V]) pushExpire(key K, val *CacheValue[V]) {
 	c.goTickerOnce.Do(func() {
 		go c.removeTicker(c.tickerDuraton)
 	})
@@ -122,14 +122,14 @@ func (c *baseCache[K, V]) pushExpire(key K, val *CacheValue[V]) {
 	c.expireQueueMu.Unlock()
 }
 
-func (c *baseCache[K, V]) reset() {
+func (c *BaseCache[K, V]) reset() {
 	c.expireQueueMu.Lock()
 	c.expireQueue.Clear()
 	c.expireQueueMu.Unlock()
 	c.stats.reset()
 }
 
-func (c *baseCache[K, V]) removeTicker(d time.Duration) {
+func (c *BaseCache[K, V]) removeTicker(d time.Duration) {
 	ticker := time.NewTicker(d)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -137,7 +137,7 @@ func (c *baseCache[K, V]) removeTicker(d time.Duration) {
 	}
 }
 
-func (c *baseCache[K, V]) removeExpired() {
+func (c *BaseCache[K, V]) removeExpired() {
 	now := c.clock.Now()
 	maybeExpired := make([]K, 0)
 	c.expireQueueMu.Lock()

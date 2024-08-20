@@ -1,6 +1,6 @@
 module github.com/doraemonkeys/ggcache
 
-go 1.23.0
+go 1.22.0
 
 require (
 	github.com/doraemonkeys/queue v1.7.0

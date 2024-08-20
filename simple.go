@@ -10,7 +10,7 @@ var _ Cacher[int, int] = &SimpleCache[int, int]{}
 
 // SimpleCache has no clear priority for evict cache. It depends on key-value map order.
 type SimpleCache[K comparable, V any] struct {
-	baseCache[K, V]
+	BaseCache[K, V]
 	items   map[K]*CacheValue[V]
 	itemsMu sync.RWMutex
 }
@@ -53,7 +53,7 @@ func (b *SimpleCacheBuilder[K, V]) Clock(clock Clock) *SimpleCacheBuilder[K, V] 
 func (b *SimpleCacheBuilder[K, V]) Build() *SimpleCache[K, V] {
 	c := &SimpleCache[K, V]{}
 	c.items = make(map[K]*CacheValue[V], b.initSize)
-	c.baseCache = *newBaseCache[K, V](b.initSize, c.batchRemoveExpired).
+	c.BaseCache = *newBaseCache[K, V](b.initSize, c.batchRemoveExpired).
 		withClock(b.clock).withTickerDuration(b.deleteExpiredInterval)
 	return c
 }
@@ -91,13 +91,13 @@ func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	s.itemsMu.Unlock()
 
 	if needInsertToExpireQueue {
-		s.baseCache.pushExpire(key, val)
+		s.BaseCache.pushExpire(key, val)
 	}
 }
 
 func (s *SimpleCache[K, V]) GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool) {
 	needInsertToExpireQueue := expireAt != nil
-	var ok bool = false
+	var ok = false
 	s.itemsMu.RLock()
 	old, exists := s.items[key]
 	if exists && !old.IsExpired(s.clock.Now()) {
@@ -121,7 +121,7 @@ func (s *SimpleCache[K, V]) GetAndRefreshExpire(key K, expireAt *time.Time) (V, 
 	}
 
 	if needInsertToExpireQueue {
-		s.baseCache.pushExpire(key, old)
+		s.BaseCache.pushExpire(key, old)
 	}
 	return old.value, true
 }
@@ -268,7 +268,7 @@ func (s *SimpleCache[K, V]) Purge() {
 	clear(s.items)
 	s.itemsMu.Unlock()
 
-	s.baseCache.reset()
+	s.BaseCache.reset()
 }
 
 func (s *SimpleCache[K, V]) Keys() []K {
