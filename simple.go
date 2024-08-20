@@ -22,8 +22,8 @@ type SimpleCacheBuilder[K comparable, V any] struct {
 	clock                 Clock
 }
 
-// NewSimpleCacheBuilder creates a new builder with default settings.
-func NewSimpleCacheBuilder[K comparable, V any]() *SimpleCacheBuilder[K, V] {
+// NewSimpleBuilder creates a new builder with default settings.
+func NewSimpleBuilder[K comparable, V any]() *SimpleCacheBuilder[K, V] {
 	return &SimpleCacheBuilder[K, V]{
 		initSize:              8,
 		deleteExpiredInterval: time.Second * 3,

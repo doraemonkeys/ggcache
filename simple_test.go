@@ -14,7 +14,7 @@ import (
 
 func TestSimpleCache(t *testing.T) {
 	// 创建一个新的 SimpleCache
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		InitSize(10).
 		DeleteExpiredInterval(time.Second).
 		Build()
@@ -73,7 +73,7 @@ func TestSimpleCache(t *testing.T) {
 
 func TestSimpleCacheConcurrent(t *testing.T) {
 	t.Run("Concurrent Set and Get", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[int, int]().Build()
+		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
@@ -90,7 +90,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 	})
 
 	t.Run("Concurrent Set with Expire and Get", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[int, int]().Build()
+		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
@@ -108,7 +108,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 	})
 
 	t.Run("Concurrent Get or Reload", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[int, int]().Build()
+		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
 		loader := func(key int, ctx context.Context) (int, *time.Time, error) {
 			return key * 3, nil, nil
@@ -130,7 +130,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 	})
 
 	t.Run("Concurrent Set and Remove", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[int, int]().Build()
+		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
 		for i := 0; i < 100; i++ {
 			wg.Add(2)
@@ -148,7 +148,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 	})
 
 	t.Run("Concurrent GetAll and Set", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[int, int]().Build()
+		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
 		for i := 0; i < 100; i++ {
 			wg.Add(2)
@@ -166,7 +166,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 }
 
 func TestSimpleCacheConcurrentSetAndGet(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 	const goroutines = 1000
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
@@ -187,7 +187,7 @@ func TestSimpleCacheConcurrentSetAndGet(t *testing.T) {
 }
 
 func TestSimpleCacheConcurrentSetWithExpireAndGet(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 	const goroutines = 1000
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
@@ -209,7 +209,7 @@ func TestSimpleCacheConcurrentSetWithExpireAndGet(t *testing.T) {
 }
 
 func TestSimpleCacheConcurrentGetOrReload(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 	const goroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
@@ -234,7 +234,7 @@ func TestSimpleCacheConcurrentGetOrReload(t *testing.T) {
 }
 
 func TestSimpleCacheConcurrentRemove(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 	const goroutines = 1000
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
@@ -265,7 +265,7 @@ func TestSimpleCacheConcurrentRemove(t *testing.T) {
 }
 
 func TestSimpleCacheConcurrentGetAllAndPurge(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 	const goroutines = 100
 	var wg sync.WaitGroup
 
@@ -301,7 +301,7 @@ func TestSimpleCacheConcurrentGetAllAndPurge(t *testing.T) {
 }
 
 func TestSimpleCache_ConcurrentReadWrite(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		InitSize(1000).
 		DeleteExpiredInterval(time.Second).
 		Build()
@@ -337,7 +337,7 @@ func TestSimpleCache_ConcurrentReadWrite(t *testing.T) {
 }
 
 func TestSimpleCache_ConcurrentExpiration(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		InitSize(10000).
 		DeleteExpiredInterval(time.Second).
 		Build()
@@ -372,7 +372,7 @@ func TestSimpleCache_ConcurrentExpiration(t *testing.T) {
 }
 
 func TestSimpleCache_ConcurrentLoadAndCache(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		InitSize(1000).
 		DeleteExpiredInterval(time.Second).
 		Build()
@@ -413,7 +413,7 @@ func TestSimpleCache_ConcurrentLoadAndCache(t *testing.T) {
 
 func TestSimpleCache_Set(t *testing.T) {
 	clock := NewFakeClock()
-	cache := NewSimpleCacheBuilder[string, int]().Clock(clock).Build()
+	cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 
 	t.Run("Set new key-value pair", func(t *testing.T) {
 		cache.Set("key1", 100)
@@ -491,7 +491,7 @@ func TestSimpleCache_Set(t *testing.T) {
 
 	t.Run("Set with same expiration time", func(t *testing.T) {
 		clock := NewFakeClock()
-		cache := NewSimpleCacheBuilder[string, int]().Clock(clock).Build()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 
 		expireAt := clock.Now().Add(time.Hour)
 
@@ -533,7 +533,7 @@ func TestSimpleCache_Set(t *testing.T) {
 
 func TestSimpleCache2(t *testing.T) {
 	t.Run("Set and Get", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		cache.Set("key1", 100)
 
 		value, ok := cache.Get("key1")
@@ -545,7 +545,7 @@ func TestSimpleCache2(t *testing.T) {
 	})
 
 	t.Run("SetWithExpire and GetWithExpire", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		expireAt := time.Now().Add(time.Hour)
 		cache.SetWithExpire("key1", 100, &expireAt)
 
@@ -556,7 +556,7 @@ func TestSimpleCache2(t *testing.T) {
 	})
 
 	t.Run("GetOrReload", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
 			return 200, nil, nil
 		}
@@ -572,7 +572,7 @@ func TestSimpleCache2(t *testing.T) {
 	})
 
 	t.Run("Remove", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		cache.Set("key1", 100)
 
 		value, ok := cache.Remove("key1")
@@ -584,7 +584,7 @@ func TestSimpleCache2(t *testing.T) {
 	})
 
 	t.Run("Purge", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		cache.Set("key1", 100)
 		cache.Set("key2", 200)
 
@@ -595,7 +595,7 @@ func TestSimpleCache2(t *testing.T) {
 
 	t.Run("Expiration", func(t *testing.T) {
 		mockClock := NewFakeClock()
-		cache := NewSimpleCacheBuilder[string, int]().
+		cache := NewSimpleBuilder[string, int]().
 			Clock(mockClock).
 			DeleteExpiredInterval(time.Second).
 			Build()
@@ -614,7 +614,7 @@ func TestSimpleCache2(t *testing.T) {
 func TestSimpleCache_RemoveBeforeExpiration(t *testing.T) {
 	mockClock := NewFakeClock()
 	deleteExpiredInterval := 3 * time.Second
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		Clock(mockClock).
 		DeleteExpiredInterval(deleteExpiredInterval).
 		Build()
@@ -655,7 +655,7 @@ func TestSimpleCache_RemoveBeforeExpiration(t *testing.T) {
 }
 
 func TestSimpleCache3(t *testing.T) {
-	cache := NewSimpleCacheBuilder[string, int]().Build()
+	cache := NewSimpleBuilder[string, int]().Build()
 
 	t.Run("Set and Get", func(t *testing.T) {
 		cache.Set("key1", 100)
@@ -734,7 +734,7 @@ func TestSimpleCache3(t *testing.T) {
 
 	t.Run("Expiration", func(t *testing.T) {
 		mockClock := NewFakeClock()
-		cache = NewSimpleCacheBuilder[string, int]().Clock(mockClock).Build()
+		cache = NewSimpleBuilder[string, int]().Clock(mockClock).Build()
 
 		expireAt := mockClock.Now().Add(time.Hour)
 		cache.SetWithExpire("key9", 900, &expireAt)
@@ -808,7 +808,7 @@ func TestSimpleCache3(t *testing.T) {
 	})
 
 	t.Run("GetOrReload with multiple calls", func(t *testing.T) {
-		cache := NewSimpleCacheBuilder[string, int]().Build()
+		cache := NewSimpleBuilder[string, int]().Build()
 		loadCount := 0
 		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
 			loadCount++
@@ -845,7 +845,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 	mockClock := NewFakeClock()
 
 	// 使用 SimpleCacheBuilder 创建缓存实例
-	cache := NewSimpleCacheBuilder[string, int]().
+	cache := NewSimpleBuilder[string, int]().
 		Clock(mockClock).
 		Build()
 

@@ -12,7 +12,7 @@ import (
 )
 
 func TestSimpleCache_SetAndGet(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 100)
 	value, ok := cache.Get("key1")
@@ -24,7 +24,7 @@ func TestSimpleCache_SetAndGet(t *testing.T) {
 }
 
 func TestSimpleCache_SetWithExpire(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	expireTime := time.Now().Add(2 * time.Second)
 	cache.SetWithExpire("key1", 200, &expireTime)
@@ -40,7 +40,7 @@ func TestSimpleCache_SetWithExpire(t *testing.T) {
 }
 
 func TestSimpleCache_Remove(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 300)
 	_, removed := cache.Remove("key1")
@@ -51,7 +51,7 @@ func TestSimpleCache_Remove(t *testing.T) {
 }
 
 func TestSimpleCache_GetOrReload(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
 		expireTime := time.Now().Add(2 * time.Second)
@@ -70,7 +70,7 @@ func TestSimpleCache_GetOrReload(t *testing.T) {
 }
 
 func TestSimpleCache_Purge(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 500)
 	cache.Set("key2", 600)
@@ -85,7 +85,7 @@ func TestSimpleCache_Purge(t *testing.T) {
 }
 
 func TestSimpleCache_Keys(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 700)
 	cache.Set("key2", 800)
@@ -95,7 +95,7 @@ func TestSimpleCache_Keys(t *testing.T) {
 }
 
 func TestSimpleCache_Len(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 900)
 	cache.Set("key2", 1000)
@@ -107,7 +107,7 @@ func TestSimpleCache_Len(t *testing.T) {
 }
 
 func TestSimpleCache_Has(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 1100)
 	assert.True(t, cache.Has("key1"))
@@ -117,7 +117,7 @@ func TestSimpleCache_Has(t *testing.T) {
 }
 
 func TestSimpleCache_BasicOperations(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	// Test Set and Get
 	cache.Set("key1", 100)
@@ -145,7 +145,7 @@ func TestSimpleCache_BasicOperations(t *testing.T) {
 
 func TestSimpleCache_Expiration(t *testing.T) {
 	clock := ggcache.NewFakeClock()
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().
+	cache := ggcache.NewSimpleBuilder[string, int]().
 		Clock(clock).
 		DeleteExpiredInterval(time.Second).
 		Build()
@@ -172,7 +172,7 @@ func TestSimpleCache_Expiration(t *testing.T) {
 }
 
 func TestSimpleCache_BatchOperations(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	// Test SetWithExpire for multiple items
 	now := time.Now()
@@ -208,7 +208,7 @@ func TestSimpleCache_BatchOperations(t *testing.T) {
 }
 
 func TestSimpleCache_ConcurrentAccess(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[int, int]().Build()
+	cache := ggcache.NewSimpleBuilder[int, int]().Build()
 	var wg sync.WaitGroup
 	numGoroutines := 100
 	numOperations := 1000
@@ -233,7 +233,7 @@ func TestSimpleCache_ConcurrentAccess(t *testing.T) {
 }
 
 func TestSimpleCache_GetOrReload2(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
 		value := len(key)
@@ -261,7 +261,7 @@ func TestSimpleCache_GetOrReload2(t *testing.T) {
 }
 
 func TestSimpleCache_AuxiliaryMethods(t *testing.T) {
-	cache := ggcache.NewSimpleCacheBuilder[string, int]().Build()
+	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	cache.Set("key1", 100)
 	cache.Set("key2", 200)
