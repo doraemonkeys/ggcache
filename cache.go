@@ -22,16 +22,15 @@ type (
 type Cacher[K comparable, V any] interface {
 	// Set inserts or updates the specified key-value pair.
 	Set(key K, value V)
+	// SetWithExpire inserts or updates the specified key-value pair with an expiration time.
 	SetWithExpire(key K, value V, expireAt *time.Time)
 	// Get returns the value for the specified key if it is present in the cache.
 	Get(key K) (V, bool)
-
+	// GetWithExpire returns the value and the expiration time for the specified key if it is present in the cache.
 	GetWithExpire(key K) (V, *time.Time, bool)
 
-	// GetRefreshExpire(key K, expireAt *time.Time) (V, bool)
+	GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool)
 
-	// GetOrReload returns the value for the specified key if it is present in the cache.
-	// If the key is not present in the cache, it loads the value by invoking the loader function or wa
 	GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error)
 
 	// GetAll returns a slice containing all key-value pairs in the cache.
@@ -78,8 +77,10 @@ type baseCache[K comparable, V any] struct {
 	// serializeFunc    SerializeFunc
 	// expiration *time.Duration
 
-	expireQueue      *pq.PriorityQueue[CacheItem[K, V]]
-	expireQueueMu    sync.Mutex
+	// The priority queue is used to determine the priority by expireAt.
+	expireQueue   *pq.PriorityQueue[CacheItem[K, V]]
+	expireQueueMu sync.Mutex
+	// Removes only the expired keys from the cache.
 	removeExpireKeys func([]K)
 	goTickerOnce     sync.Once
 	tickerDuraton    time.Duration
@@ -90,7 +91,7 @@ type baseCache[K comparable, V any] struct {
 	*stats
 }
 
-func NewBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCache[K, V] {
+func newBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCache[K, V] {
 	return &baseCache[K, V]{
 		size:             size,
 		stats:            &stats{},
@@ -102,17 +103,17 @@ func NewBaseCache[K comparable, V any](size int, removeKeys func([]K)) *baseCach
 	}
 }
 
-func (c *baseCache[K, V]) WithClock(clock Clock) *baseCache[K, V] {
+func (c *baseCache[K, V]) withClock(clock Clock) *baseCache[K, V] {
 	c.clock = clock
 	return c
 }
 
-func (c *baseCache[K, V]) WithTickerDuration(d time.Duration) *baseCache[K, V] {
+func (c *baseCache[K, V]) withTickerDuration(d time.Duration) *baseCache[K, V] {
 	c.tickerDuraton = d
 	return c
 }
 
-func (c *baseCache[K, V]) PushExpire(key K, val *CacheValue[V]) {
+func (c *baseCache[K, V]) pushExpire(key K, val *CacheValue[V]) {
 	c.goTickerOnce.Do(func() {
 		go c.removeTicker(c.tickerDuraton)
 	})
@@ -121,10 +122,11 @@ func (c *baseCache[K, V]) PushExpire(key K, val *CacheValue[V]) {
 	c.expireQueueMu.Unlock()
 }
 
-func (c *baseCache[K, V]) Reset() {
+func (c *baseCache[K, V]) reset() {
 	c.expireQueueMu.Lock()
 	c.expireQueue.Clear()
 	c.expireQueueMu.Unlock()
+	c.stats.reset()
 }
 
 func (c *baseCache[K, V]) removeTicker(d time.Duration) {
@@ -163,7 +165,8 @@ func (c *baseCache[K, V]) removeExpired() {
 type CacheValue[V any] struct {
 	value V
 	// Change expireAt will cause the inconsistency of the expiration priority queue,
-	// resulting in expired keys may not be deleted in time
+	// resulting in expired keys may not be deleted in time.
+	// So, change expireAt should hold the lock to avoid removing the expired keys by the removeExpired method.
 	expireAt *time.Time
 	deleted  bool
 }

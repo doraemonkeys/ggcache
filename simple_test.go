@@ -67,7 +67,7 @@ func TestSimpleCache(t *testing.T) {
 	// 测试 RemoveBatch empty
 	cache.itemsMu.Lock()
 	cache.RemoveBatch([]string{})
-	cache.removeBatchOnlyExpired([]string{})
+	cache.batchRemoveExpired([]string{})
 	cache.itemsMu.Unlock()
 }
 
@@ -838,4 +838,120 @@ func TestSimpleCache3(t *testing.T) {
 		assert.Equal(t, 100, value)
 	})
 
+}
+
+func TestSimpleCache_GetRefreshExpire(t *testing.T) {
+	// 创建一个模拟时钟，方便控制时间
+	mockClock := NewFakeClock()
+
+	// 使用 SimpleCacheBuilder 创建缓存实例
+	cache := NewSimpleCacheBuilder[string, int]().
+		Clock(mockClock).
+		Build()
+
+	// 测试用例1: 缓存未命中
+	t.Run("Cache Miss", func(t *testing.T) {
+		value, ok := cache.GetAndRefreshExpire("key1", nil)
+		assert.False(t, ok)
+		assert.Equal(t, 0, value)
+		assert.Equal(t, uint64(1), cache.MissCount())
+	})
+
+	// 测试用例2: 设置值后缓存命中
+	t.Run("Cache Hit After Set", func(t *testing.T) {
+		cache.Set("key2", 100)
+		value, ok := cache.GetAndRefreshExpire("key2", nil)
+		assert.True(t, ok)
+		assert.Equal(t, 100, value)
+		assert.Equal(t, uint64(1), cache.HitCount())
+	})
+
+	// 测试用例3: 刷新过期时间
+	t.Run("Refresh Expire Time", func(t *testing.T) {
+		now := mockClock.Now()
+		expireAt := now.Add(time.Hour)
+		cache.SetWithExpire("key3", 200, &expireAt)
+
+		// 刷新过期时间
+		newExpireAt := now.Add(2 * time.Hour)
+		value, ok := cache.GetAndRefreshExpire("key3", &newExpireAt)
+		assert.True(t, ok)
+		assert.Equal(t, 200, value)
+
+		// 验证过期时间已更新
+		_, expireTime, exists := cache.GetWithExpire("key3")
+		assert.True(t, exists)
+		assert.Equal(t, newExpireAt, *expireTime)
+	})
+
+	// 测试用例4: 移除过期时间
+	t.Run("Remove Expire Time", func(t *testing.T) {
+		now := mockClock.Now()
+		expireAt := now.Add(time.Hour)
+		cache.SetWithExpire("key4", 300, &expireAt)
+
+		// 移除过期时间
+		value, ok := cache.GetAndRefreshExpire("key4", nil)
+		assert.True(t, ok)
+		assert.Equal(t, 300, value)
+
+		// 验证过期时间已被移除
+		_, expireTime, exists := cache.GetWithExpire("key4")
+		assert.True(t, exists)
+		assert.Nil(t, expireTime)
+	})
+
+	// 测试用例5: 过期项的处理
+	t.Run("Expired Item", func(t *testing.T) {
+		now := mockClock.Now()
+		expireAt := now.Add(time.Hour)
+		cache.SetWithExpire("key5", 400, &expireAt)
+
+		// 模拟时间流逝，使项目过期
+		mockClock.Advance(2 * time.Hour)
+
+		// 尝试获取过期项
+		value, ok := cache.GetAndRefreshExpire("key5", nil)
+		assert.False(t, ok)
+		assert.Equal(t, 0, value)
+		assert.Equal(t, uint64(2), cache.MissCount())
+	})
+
+	// 测试用例6: 刷新相同的过期时间
+	t.Run("Refresh With Same Expire Time", func(t *testing.T) {
+		now := mockClock.Now()
+		expireAt := now.Add(time.Hour)
+		cache.SetWithExpire("key6", 500, &expireAt)
+
+		// 使用相同的过期时间刷新
+		value, ok := cache.GetAndRefreshExpire("key6", &expireAt)
+		assert.True(t, ok)
+		assert.Equal(t, 500, value)
+
+		// 验证过期时间未变
+		_, actualExpireTime, exists := cache.GetWithExpire("key6")
+		assert.True(t, exists)
+		assert.Equal(t, expireAt, *actualExpireTime)
+	})
+
+	// 测试用例7: 并发访问
+	t.Run("Concurrent Access", func(t *testing.T) {
+		const goroutines = 100
+		done := make(chan bool)
+
+		for i := 0; i < goroutines; i++ {
+			go func(index int) {
+				key := fmt.Sprintf("concurrent_key_%d", index)
+				cache.Set(key, index)
+				value, ok := cache.GetAndRefreshExpire(key, nil)
+				assert.True(t, ok)
+				assert.Equal(t, index, value)
+				done <- true
+			}(i)
+		}
+
+		for i := 0; i < goroutines; i++ {
+			<-done
+		}
+	})
 }

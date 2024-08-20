@@ -15,12 +15,14 @@ type SimpleCache[K comparable, V any] struct {
 	itemsMu sync.RWMutex
 }
 
+// SimpleCacheBuilder helps configure and build a SimpleCache.
 type SimpleCacheBuilder[K comparable, V any] struct {
 	initSize              int
 	deleteExpiredInterval time.Duration
 	clock                 Clock
 }
 
+// NewSimpleCacheBuilder creates a new builder with default settings.
 func NewSimpleCacheBuilder[K comparable, V any]() *SimpleCacheBuilder[K, V] {
 	return &SimpleCacheBuilder[K, V]{
 		initSize:              8,
@@ -29,38 +31,45 @@ func NewSimpleCacheBuilder[K comparable, V any]() *SimpleCacheBuilder[K, V] {
 	}
 }
 
+// InitSize sets the initial size of the cache.
 func (b *SimpleCacheBuilder[K, V]) InitSize(size int) *SimpleCacheBuilder[K, V] {
 	b.initSize = size
 	return b
 }
 
+// DeleteExpiredInterval sets the interval for deleting expired items.
 func (b *SimpleCacheBuilder[K, V]) DeleteExpiredInterval(d time.Duration) *SimpleCacheBuilder[K, V] {
 	b.deleteExpiredInterval = d
 	return b
 }
 
+// Clock sets the clock used for expiration.
 func (b *SimpleCacheBuilder[K, V]) Clock(clock Clock) *SimpleCacheBuilder[K, V] {
 	b.clock = clock
 	return b
 }
 
+// Build constructs the SimpleCache with the configured settings.
 func (b *SimpleCacheBuilder[K, V]) Build() *SimpleCache[K, V] {
 	c := &SimpleCache[K, V]{}
 	c.items = make(map[K]*CacheValue[V], b.initSize)
-	c.baseCache = *NewBaseCache[K, V](b.initSize, c.removeBatchOnlyExpired).
-		WithClock(b.clock).WithTickerDuration(b.deleteExpiredInterval)
+	c.baseCache = *newBaseCache[K, V](b.initSize, c.batchRemoveExpired).
+		withClock(b.clock).withTickerDuration(b.deleteExpiredInterval)
 	return c
 }
 
+// Set inserts or updates the specified key-value pair.
 func (s *SimpleCache[K, V]) Set(key K, value V) {
 	s.SetWithExpire(key, value, nil)
 }
 
+// SetWithExpire inserts or updates the specified key-value pair with an expiration time.
 func (s *SimpleCache[K, V]) SetWithExpire(key K, value V, expireAt *time.Time) {
 	var val = &CacheValue[V]{value: value, expireAt: expireAt}
 	s.set(key, val)
 }
 
+// set adds or updates a cache entry and manages expiration.
 func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	needInsertToExpireQueue := val.expireAt != nil
 	s.itemsMu.Lock()
@@ -82,39 +91,75 @@ func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	s.itemsMu.Unlock()
 
 	if needInsertToExpireQueue {
-		s.baseCache.PushExpire(key, val)
+		s.baseCache.pushExpire(key, val)
 	}
 }
 
+func (s *SimpleCache[K, V]) GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool) {
+	needInsertToExpireQueue := expireAt != nil
+	var ok bool = false
+	s.itemsMu.RLock()
+	old, exists := s.items[key]
+	if exists && !old.IsExpired(s.clock.Now()) {
+		ok = true
+		if expireAt == nil {
+			needInsertToExpireQueue = false
+		} else if old.expireAt != nil && expireAt.Equal(*old.expireAt) {
+			needInsertToExpireQueue = false
+		} else {
+			needInsertToExpireQueue = true
+		}
+		old.expireAt = expireAt
+	}
+	s.itemsMu.RUnlock()
+
+	if ok {
+		s.incrHitCount()
+	} else {
+		s.incrMissCount()
+		return *new(V), false
+	}
+
+	if needInsertToExpireQueue {
+		s.baseCache.pushExpire(key, old)
+	}
+	return old.value, true
+}
+
+// Get retrieves a value by key, returning false if not found or expired.
 func (s *SimpleCache[K, V]) Get(key K) (V, bool) {
 	v, _, ok := s.GetWithExpire(key)
 	return v, ok
 }
 
+// GetWithExpire retrieves a value and its expiration by key.
 func (s *SimpleCache[K, V]) GetWithExpire(key K) (V, *time.Time, bool) {
 	var item *CacheValue[V]
 	s.itemsMu.RLock()
 	item, ok := s.items[key]
 	s.itemsMu.RUnlock()
 	if !ok {
-		s.IncrMissCount()
+		s.incrMissCount()
 		return *new(V), nil, false
 	}
 	if item.IsExpired(s.clock.Now()) {
-		s.IncrMissCount()
+		s.incrMissCount()
 		return *new(V), nil, false
 	}
-	s.IncrHitCount()
+	s.incrHitCount()
 	return item.value, item.expireAt, true
 }
 
+// GetOrReload retrieves a value by key, automatically reloading and caching it if expired or missing.
+// It uses a loader function to fetch the value and leverages loadGroup to prevent redundant loads,
+// improving performance by ensuring only one load operation per key at a time.
 func (s *SimpleCache[K, V]) GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error) {
 	var item *CacheValue[V]
 	s.itemsMu.RLock()
 	item, ok := s.items[key]
 	s.itemsMu.RUnlock()
 	if ok && !item.IsExpired(s.clock.Now()) {
-		s.IncrHitCount()
+		s.incrHitCount()
 		return item.value, nil
 	}
 	var f = func(key K, ctx context.Context) (*CacheValue[V], error) {
@@ -128,13 +173,13 @@ func (s *SimpleCache[K, V]) GetOrReload(key K, loader LoaderExpireFunc[K, V], ct
 	}
 	item, loaderCalled, err := s.loadGroup.Do(key, f, ctx)
 	if err != nil {
-		s.IncrMissCount()
+		s.incrMissCount()
 		return *new(V), err
 	}
 	if loaderCalled {
-		s.IncrMissCount()
+		s.incrMissCount()
 	} else {
-		s.IncrHitCount()
+		s.incrHitCount()
 	}
 	return item.value, nil
 }
@@ -167,6 +212,7 @@ func (s *SimpleCache[K, V]) GetAll() ([]K, []V) {
 	return retK, retV
 }
 
+// Remove deletes a key from the cache, returning the value and whether it was found.
 func (s *SimpleCache[K, V]) Remove(key K) (V, bool) {
 	s.itemsMu.Lock()
 	defer s.itemsMu.Unlock()
@@ -179,6 +225,7 @@ func (s *SimpleCache[K, V]) Remove(key K) (V, bool) {
 	return *new(V), ok
 }
 
+// RemoveBatch deletes multiple keys from the cache.
 func (s *SimpleCache[K, V]) RemoveBatch(keys []K) {
 	if len(keys) == 0 {
 		return
@@ -196,7 +243,8 @@ func (s *SimpleCache[K, V]) RemoveBatch(keys []K) {
 	}
 }
 
-func (s *SimpleCache[K, V]) removeBatchOnlyExpired(keys []K) {
+// batchRemoveExpired removes only expired keys from the cache.
+func (s *SimpleCache[K, V]) batchRemoveExpired(keys []K) {
 	if len(keys) == 0 {
 		return
 	}
@@ -214,12 +262,13 @@ func (s *SimpleCache[K, V]) removeBatchOnlyExpired(keys []K) {
 	}
 }
 
+// Purge clears all items from the cache.
 func (s *SimpleCache[K, V]) Purge() {
 	s.itemsMu.Lock()
 	clear(s.items)
 	s.itemsMu.Unlock()
 
-	s.baseCache.Reset()
+	s.baseCache.reset()
 }
 
 func (s *SimpleCache[K, V]) Keys() []K {
@@ -235,6 +284,7 @@ func (s *SimpleCache[K, V]) Keys() []K {
 	return ret
 }
 
+// Len returns the number of items in the cache, including expired items that have not been cleaned up yet.
 func (s *SimpleCache[K, V]) Len() int {
 	return len(s.items)
 }

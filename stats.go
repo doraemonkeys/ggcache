@@ -17,13 +17,18 @@ type stats struct {
 	missCount uint64
 }
 
+func (st *stats) reset() {
+	atomic.StoreUint64(&st.hitCount, 0)
+	atomic.StoreUint64(&st.missCount, 0)
+}
+
 // increment hit count
-func (st *stats) IncrHitCount() uint64 {
+func (st *stats) incrHitCount() uint64 {
 	return atomic.AddUint64(&st.hitCount, 1)
 }
 
 // increment miss count
-func (st *stats) IncrMissCount() uint64 {
+func (st *stats) incrMissCount() uint64 {
 	return atomic.AddUint64(&st.missCount, 1)
 }
 
