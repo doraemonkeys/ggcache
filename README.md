@@ -7,3 +7,16 @@
 ```bash
 go get github.com/doraemonkeys/ggcache
 ```
+
+## Features
+
+- Simple API
+- Goroutine safe
+- Generic
+- Item expiration and automatic deletion
+- Optimized concurrent loading for cache misses
+
+
+## Reference
+
+- [bluele/gcache](https://github.com/bluele/gcache)
