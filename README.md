@@ -12,7 +12,6 @@ go get github.com/doraemonkeys/ggcache
 
 - Simple API
 - Goroutine safe
-- Generic
 - Item expiration and automatic deletion
 - Optimized concurrent loading for cache misses
 
