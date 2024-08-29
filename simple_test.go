@@ -56,7 +56,7 @@ func TestSimpleCache(t *testing.T) {
 	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
 		return 400, nil, nil
 	}
-	value, err := cache.GetOrReload("key4", loader, context.Background())
+	value, err := cache.GetOrReload(context.Background(), "key4", loader)
 	assert.NoError(t, err)
 	assert.Equal(t, 400, value)
 
@@ -117,7 +117,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				v, err := cache.GetOrReload(i, loader, context.Background())
+				v, err := cache.GetOrReload(context.Background(), i, loader)
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
@@ -223,7 +223,7 @@ func TestSimpleCacheConcurrentGetOrReload(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			key := fmt.Sprintf("key%d", i)
-			value, err := cache.GetOrReload(key, loader, context.Background())
+			value, err := cache.GetOrReload(context.Background(), key, loader)
 			if err != nil || value != len(key) {
 				t.Errorf("Unexpected result for key %s: (%d, %v)", key, value, err)
 			}
@@ -399,7 +399,7 @@ func TestSimpleCache_ConcurrentLoadAndCache(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOperations && time.Since(start) < testDuration; j++ {
 				key := fmt.Sprintf("key-%d-%d", id, j%100) // Reuse some keys to test caching
-				_, err := cache.GetOrReload(key, loader, context.Background())
+				_, err := cache.GetOrReload(context.Background(), key, loader)
 				if err != nil {
 					t.Errorf("Error loading key %s: %v", key, err)
 				}
@@ -561,7 +561,7 @@ func TestSimpleCache2(t *testing.T) {
 			return 200, nil, nil
 		}
 
-		value, err := cache.GetOrReload("key1", loader, context.Background())
+		value, err := cache.GetOrReload(context.Background(), "key1", loader)
 		assert.NoError(t, err)
 		assert.Equal(t, 200, value)
 
@@ -703,12 +703,12 @@ func TestSimpleCache3(t *testing.T) {
 			return 600, nil, nil
 		}
 
-		value, err := cache.GetOrReload("key6", loader, context.Background())
+		value, err := cache.GetOrReload(context.Background(), "key6", loader)
 		assert.NoError(t, err)
 		assert.Equal(t, 600, value)
 
 		// Second call should return cached value
-		value, err = cache.GetOrReload("key6", loader, context.Background())
+		value, err = cache.GetOrReload(context.Background(), "key6", loader)
 		assert.NoError(t, err)
 		assert.Equal(t, 600, value)
 	})
@@ -821,7 +821,7 @@ func TestSimpleCache3(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				value, err := cache.GetOrReload("key18", loader, context.Background())
+				value, err := cache.GetOrReload(context.Background(), "key18", loader)
 				assert.NoError(t, err)
 				assert.Equal(t, 100, value)
 			}()
@@ -851,7 +851,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 
 	// 测试用例1: 缓存未命中
 	t.Run("Cache Miss", func(t *testing.T) {
-		value, ok := cache.GetAndRefreshExpire("key1", nil)
+		value, ok := cache.GetRefresh("key1", nil)
 		assert.False(t, ok)
 		assert.Equal(t, 0, value)
 		assert.Equal(t, uint64(1), cache.MissCount())
@@ -860,7 +860,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 	// 测试用例2: 设置值后缓存命中
 	t.Run("Cache Hit After Set", func(t *testing.T) {
 		cache.Set("key2", 100)
-		value, ok := cache.GetAndRefreshExpire("key2", nil)
+		value, ok := cache.GetRefresh("key2", nil)
 		assert.True(t, ok)
 		assert.Equal(t, 100, value)
 		assert.Equal(t, uint64(1), cache.HitCount())
@@ -874,7 +874,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 
 		// 刷新过期时间
 		newExpireAt := now.Add(2 * time.Hour)
-		value, ok := cache.GetAndRefreshExpire("key3", &newExpireAt)
+		value, ok := cache.GetRefresh("key3", &newExpireAt)
 		assert.True(t, ok)
 		assert.Equal(t, 200, value)
 
@@ -891,7 +891,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 		cache.SetWithExpire("key4", 300, &expireAt)
 
 		// 移除过期时间
-		value, ok := cache.GetAndRefreshExpire("key4", nil)
+		value, ok := cache.GetRefresh("key4", nil)
 		assert.True(t, ok)
 		assert.Equal(t, 300, value)
 
@@ -911,7 +911,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 		mockClock.Advance(2 * time.Hour)
 
 		// 尝试获取过期项
-		value, ok := cache.GetAndRefreshExpire("key5", nil)
+		value, ok := cache.GetRefresh("key5", nil)
 		assert.False(t, ok)
 		assert.Equal(t, 0, value)
 		assert.Equal(t, uint64(2), cache.MissCount())
@@ -924,7 +924,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 		cache.SetWithExpire("key6", 500, &expireAt)
 
 		// 使用相同的过期时间刷新
-		value, ok := cache.GetAndRefreshExpire("key6", &expireAt)
+		value, ok := cache.GetRefresh("key6", &expireAt)
 		assert.True(t, ok)
 		assert.Equal(t, 500, value)
 
@@ -943,7 +943,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 			go func(index int) {
 				key := fmt.Sprintf("concurrent_key_%d", index)
 				cache.Set(key, index)
-				value, ok := cache.GetAndRefreshExpire(key, nil)
+				value, ok := cache.GetRefresh(key, nil)
 				assert.True(t, ok)
 				assert.Equal(t, index, value)
 				done <- true
@@ -953,5 +953,129 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 		for i := 0; i < goroutines; i++ {
 			<-done
 		}
+	})
+}
+
+func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
+	t.Run("cache hit and not expired", func(t *testing.T) {
+		clock := NewFakeClock()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
+		expireAt := clock.Now().Add(time.Hour)
+		cache.SetWithExpire("key", 42, &expireAt)
+
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, nil)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 42, result)
+		assert.Equal(t, uint64(1), cache.HitCount())
+		assert.Equal(t, uint64(0), cache.MissCount())
+	})
+
+	t.Run("cache hit but refresh expiration", func(t *testing.T) {
+		clock := NewFakeClock()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
+		oldExpireAt := clock.Now().Add(time.Hour)
+		cache.SetWithExpire("key", 42, &oldExpireAt)
+
+		newExpireAt := clock.Now().Add(2 * time.Hour)
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", &newExpireAt, nil)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 42, result)
+		assert.Equal(t, uint64(1), cache.HitCount())
+		assert.Equal(t, uint64(0), cache.MissCount())
+
+		// Verify the expiration time was updated
+		_, expireTime, _ := cache.GetWithExpire("key")
+		assert.Equal(t, newExpireAt, *expireTime)
+	})
+
+	t.Run("cache miss and load", func(t *testing.T) {
+		clock := NewFakeClock()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
+
+		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+			expireAt := clock.Now().Add(time.Hour)
+			return 100, &expireAt, nil
+		}
+
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 100, result)
+		assert.Equal(t, uint64(0), cache.HitCount())
+		assert.Equal(t, uint64(1), cache.MissCount())
+
+		// Verify the value was cached
+		cachedValue, ok := cache.Get("key")
+		assert.True(t, ok)
+		assert.Equal(t, 100, cachedValue)
+	})
+
+	t.Run("loader returns error", func(t *testing.T) {
+		clock := NewFakeClock()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
+
+		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+			return 0, nil, fmt.Errorf("load error")
+		}
+
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+
+		assert.Error(t, err)
+		assert.Equal(t, "load error", err.Error())
+		assert.Equal(t, 0, result)
+		assert.Equal(t, uint64(0), cache.HitCount())
+		assert.Equal(t, uint64(1), cache.MissCount())
+
+		// Verify the value was not cached
+		_, ok := cache.Get("key")
+		assert.False(t, ok)
+	})
+
+	t.Run("concurrent requests", func(t *testing.T) {
+		clock := NewFakeClock()
+		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
+
+		loadCount := 0
+		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+			loadCount++
+			time.Sleep(10 * time.Millisecond) // Simulate some work
+			expireAt := clock.Now().Add(time.Hour)
+			return 200, &expireAt, nil
+		}
+
+		const concurrentRequests = 10
+		results := make(chan int, concurrentRequests)
+		errors := make(chan error, concurrentRequests)
+
+		for i := 0; i < concurrentRequests; i++ {
+			go func() {
+				result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+				if err != nil {
+					errors <- err
+				} else {
+					results <- result
+				}
+			}()
+		}
+
+		for i := 0; i < concurrentRequests; i++ {
+			select {
+			case result := <-results:
+				assert.Equal(t, 200, result)
+			case err := <-errors:
+				t.Fatalf("Unexpected error: %v", err)
+			}
+		}
+
+		assert.Equal(t, 1, loadCount, "Loader should only be called once")
+		assert.Equal(t, uint64(9), cache.HitCount())
+		assert.Equal(t, uint64(1), cache.MissCount())
+
+		// Verify the value was cached
+		cachedValue, ok := cache.Get("key")
+		assert.True(t, ok)
+		assert.Equal(t, 200, cachedValue)
 	})
 }

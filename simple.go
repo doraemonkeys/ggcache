@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var _ Cacher[int, int] = &SimpleCache[int, int]{}
+// var _ Cacher[int, int] = &SimpleCache[int, int]{}
 
 // SimpleCache has no clear priority for evict cache. It depends on key-value map order.
 type SimpleCache[K comparable, V any] struct {
@@ -95,7 +95,11 @@ func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	}
 }
 
-func (s *SimpleCache[K, V]) GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool) {
+func (s *SimpleCache[K, V]) GetRefresh(key K, expireAt *time.Time) (V, bool) {
+	return s.getRefresh(key, expireAt, true)
+}
+
+func (s *SimpleCache[K, V]) getRefresh(key K, expireAt *time.Time, setMissCount bool) (V, bool) {
 	needInsertToExpireQueue := expireAt != nil
 	var ok = false
 	s.itemsMu.RLock()
@@ -113,10 +117,15 @@ func (s *SimpleCache[K, V]) GetAndRefreshExpire(key K, expireAt *time.Time) (V, 
 	}
 	s.itemsMu.RUnlock()
 
-	if ok {
-		s.incrHitCount()
-	} else {
-		s.incrMissCount()
+	if setMissCount {
+		if ok {
+			s.incrHitCount()
+		} else {
+			s.incrMissCount()
+		}
+	}
+
+	if !ok {
 		return *new(V), false
 	}
 
@@ -153,7 +162,7 @@ func (s *SimpleCache[K, V]) GetWithExpire(key K) (V, *time.Time, bool) {
 // GetOrReload retrieves a value by key, automatically reloading and caching it if expired or missing.
 // It uses a loader function to fetch the value and leverages loadGroup to prevent redundant loads,
 // improving performance by ensuring only one load operation per key at a time.
-func (s *SimpleCache[K, V]) GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error) {
+func (s *SimpleCache[K, V]) GetOrReload(ctx context.Context, key K, loader LoaderExpireFunc[K, V]) (V, error) {
 	var item *CacheValue[V]
 	s.itemsMu.RLock()
 	item, ok := s.items[key]
@@ -162,6 +171,19 @@ func (s *SimpleCache[K, V]) GetOrReload(key K, loader LoaderExpireFunc[K, V], ct
 		s.incrHitCount()
 		return item.value, nil
 	}
+	return s.reloadOrWait(key, loader, ctx)
+}
+
+func (s *SimpleCache[K, V]) GetRefreshOrReload(ctx context.Context, key K, refreshExpireAt *time.Time, loader LoaderExpireFunc[K, V]) (V, error) {
+	v, ok := s.getRefresh(key, refreshExpireAt, false)
+	if ok {
+		s.incrHitCount()
+		return v, nil
+	}
+	return s.reloadOrWait(key, loader, ctx)
+}
+
+func (s *SimpleCache[K, V]) reloadOrWait(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error) {
 	var f = func(key K, ctx context.Context) (*CacheValue[V], error) {
 		value, expireAt, err := loader(key, ctx)
 		if err != nil {

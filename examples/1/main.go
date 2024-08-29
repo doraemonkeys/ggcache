@@ -31,11 +31,11 @@ func main() {
 	}
 
 	ctx := context.Background()
-	if val, err := cache.GetOrReload("three", loader, ctx); err == nil {
+	if val, err := cache.GetOrReload(ctx, "three", loader); err == nil {
 		fmt.Printf("Value for 'three' (loaded): %d\n", val)
 	}
 
-	if val, err := cache.GetOrReload("three", loader, ctx); err == nil {
+	if val, err := cache.GetOrReload(ctx, "three", loader); err == nil {
 		fmt.Printf("Value for 'three' (from cache): %d\n", val)
 	}
 

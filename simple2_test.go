@@ -58,13 +58,13 @@ func TestSimpleCache_GetOrReload(t *testing.T) {
 		return 400, &expireTime, nil
 	}
 
-	value, err := cache.GetOrReload("key1", loader, context.Background())
+	value, err := cache.GetOrReload(context.Background(), "key1", loader)
 	assert.NoError(t, err)
 	assert.Equal(t, 400, value)
 
 	time.Sleep(3 * time.Second) // Wait for expiration
 
-	value, err = cache.GetOrReload("key1", loader, context.Background())
+	value, err = cache.GetOrReload(context.Background(), "key1", loader)
 	assert.NoError(t, err)
 	assert.Equal(t, 400, value)
 }
@@ -242,12 +242,12 @@ func TestSimpleCache_GetOrReload2(t *testing.T) {
 	}
 
 	// Test getting a non-existent key
-	value, err := cache.GetOrReload("test", loader, context.Background())
+	value, err := cache.GetOrReload(context.Background(), "test", loader)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, value)
 
 	// Test getting an existing key
-	value, err = cache.GetOrReload("test", loader, context.Background())
+	value, err = cache.GetOrReload(context.Background(), "test", loader)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, value)
 
@@ -255,7 +255,7 @@ func TestSimpleCache_GetOrReload2(t *testing.T) {
 	errorLoader := func(key string, ctx context.Context) (int, *time.Time, error) {
 		return 0, nil, fmt.Errorf("loader error")
 	}
-	_, err = cache.GetOrReload("error", errorLoader, context.Background())
+	_, err = cache.GetOrReload(context.Background(), "error", errorLoader)
 	assert.Error(t, err)
 	assert.Equal(t, "loader error", err.Error())
 }
