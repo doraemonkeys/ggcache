@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func main() {
+func Example() {
 	cache := ggcache.NewSimpleBuilder[string, int]().
 		InitSize(10).
 		DeleteExpiredInterval(time.Second * 5).
@@ -20,8 +20,8 @@ func main() {
 		fmt.Printf("Value for 'one': %d\n", val)
 	}
 
-	if val, expireAt, ok := cache.GetWithExpire("two"); ok {
-		fmt.Printf("Value for 'two': %d, expires at: %v\n", val, expireAt)
+	if val, _, ok := cache.GetWithExpire("two"); ok {
+		fmt.Printf("Value for 'two': %d\n", val)
 	}
 
 	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
@@ -40,6 +40,13 @@ func main() {
 	}
 
 	fmt.Printf("Cache stats: %+v\n", cache.HitRate())
+
+	// Output:
+	// Value for 'one': 1
+	// Value for 'two': 2
+	// Value for 'three' (loaded): 50
+	// Value for 'three' (from cache): 50
+	// Cache stats: 0.75
 }
 
 func ptrTime(t time.Time) *time.Time {
