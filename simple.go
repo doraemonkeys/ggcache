@@ -53,7 +53,7 @@ func (b *SimpleCacheBuilder[K, V]) Clock(clock Clock) *SimpleCacheBuilder[K, V] 
 func (b *SimpleCacheBuilder[K, V]) Build() *SimpleCache[K, V] {
 	c := &SimpleCache[K, V]{}
 	c.items = make(map[K]*CacheValue[V], b.initSize)
-	c.BaseCache = *newBaseCache[K, V](b.initSize, c.batchRemoveExpired).
+	c.BaseCache = *newBaseCache[K, V](c.batchRemoveExpired).
 		withClock(b.clock).withTickerDuration(b.deleteExpiredInterval)
 	return c
 }
@@ -97,6 +97,8 @@ func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	}
 }
 
+// GetRefresh retrieves a value by key, refreshing the expiration time if it is non-zero.
+// It returns false if the item is not found or has expired.
 func (s *SimpleCache[K, V]) GetRefresh(key K, expireAt time.Time) (V, bool) {
 	return s.getRefresh(key, expireAt, true)
 }

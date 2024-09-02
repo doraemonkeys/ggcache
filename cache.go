@@ -2,7 +2,6 @@ package ggcache
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -53,18 +52,18 @@ type (
 // 	statsAccessor
 // }
 
-var (
-	ErrorCacheEmpty = errors.New("cache is empty")
-)
+// var (
+// 	ErrorCacheEmpty = errors.New("cache is empty")
+// )
 
-type CacheType string
+// type CacheType string
 
-const (
-	TYPE_SIMPLE CacheType = "simple"
-	TYPE_LRU    CacheType = "lru"
-	TYPE_LFU    CacheType = "lfu"
-	TYPE_ARC    CacheType = "arc"
-)
+// const (
+// 	TYPE_SIMPLE CacheType = "simple"
+// 	TYPE_LRU    CacheType = "lru"
+// 	TYPE_LFU    CacheType = "lfu"
+// 	TYPE_ARC    CacheType = "arc"
+// )
 
 type BaseCache[K comparable, V any] struct {
 
@@ -84,16 +83,16 @@ type BaseCache[K comparable, V any] struct {
 	removeExpireKeys func([]K)
 	goTickerOnce     sync.Once
 	tickerDuraton    time.Duration
-	size             int
-	clock            Clock
+	// size             int
+	clock Clock
 	// mu            sync.RWMutex
 	loadGroup *Group[K, *CacheValue[V]]
 	*stats
 }
 
-func newBaseCache[K comparable, V any](size int, removeKeys func([]K)) *BaseCache[K, V] {
+func newBaseCache[K comparable, V any](removeKeys func([]K)) *BaseCache[K, V] {
 	return &BaseCache[K, V]{
-		size:             size,
+		// size:             size,
 		stats:            &stats{},
 		loadGroup:        NewGroup[K, *CacheValue[V]](),
 		clock:            NewRealClock(),
@@ -138,6 +137,9 @@ func (c *BaseCache[K, V]) removeTicker(d time.Duration) {
 }
 
 func (c *BaseCache[K, V]) removeExpired() {
+	if c.expireQueue.Len() == 0 {
+		return
+	}
 	now := c.clock.Now()
 	maybeExpired := make([]K, 0)
 	c.expireQueueMu.Lock()

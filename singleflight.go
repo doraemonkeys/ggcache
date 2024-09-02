@@ -13,7 +13,8 @@ import (
 type call[V any] struct {
 	// signals when the call is done
 	doneCond chan struct{}
-	doneOnce sync.Once
+	// doneOnce sync.Once
+
 	// the value returned by the call
 	val V
 	// any error encountered during the call
@@ -27,14 +28,12 @@ func newCall[V any]() *call[V] {
 }
 
 func (c *call[V]) done(val V, err error, onDone ...func()) {
-	c.doneOnce.Do(func() {
-		c.val = val
-		c.err = err
-		close(c.doneCond)
-		for _, f := range onDone {
-			f()
-		}
-	})
+	c.val = val
+	c.err = err
+	close(c.doneCond)
+	for _, f := range onDone {
+		f()
+	}
 }
 
 // Group represents a class of work and forms a namespace in which
@@ -88,13 +87,18 @@ func (g *Group[K, V]) Do(key K, loader LoaderFunc[K, V], ctx context.Context) (v
 }
 
 func (g *Group[K, V]) call(caller *call[V], key K, loader LoaderFunc[K, V], ctx context.Context) {
+	var (
+		val V
+		err error
+	)
 	defer func() {
 		if r := recover(); r != nil {
 			caller.done(*new(V), fmt.Errorf("loader panic: %v, key: %v", r, key), func() { g.removeKey(key) })
+		} else {
+			caller.done(val, err, func() { g.removeKey(key) })
 		}
 	}()
-	val, err := loader(key, ctx)
-	caller.done(val, err, func() { g.removeKey(key) })
+	val, err = loader(key, ctx)
 }
 
 func (g *Group[K, V]) removeKey(key K) {
