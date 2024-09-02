@@ -4,12 +4,12 @@ import (
 	"sync/atomic"
 )
 
-type statsAccessor interface {
-	HitCount() uint64
-	MissCount() uint64
-	LookupCount() uint64
-	HitRate() float64
-}
+// type statsAccessor interface {
+// 	HitCount() uint64
+// 	MissCount() uint64
+// 	LookupCount() uint64
+// 	HitRate() float64
+// }
 
 // statistics
 type stats struct {

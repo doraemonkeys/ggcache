@@ -14,7 +14,7 @@ func Example() {
 		Build()
 
 	cache.Set("one", 1)
-	cache.SetWithExpire("two", 2, ptrTime(time.Now().Add(time.Second*10)))
+	cache.SetWithExpire("two", 2, time.Now().Add(time.Second*10))
 
 	if val, ok := cache.Get("one"); ok {
 		fmt.Printf("Value for 'one': %d\n", val)
@@ -24,9 +24,9 @@ func Example() {
 		fmt.Printf("Value for 'two': %d\n", val)
 	}
 
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
 		value := len(key) * 10
-		expireAt := ptrTime(time.Now().Add(time.Minute))
+		expireAt := time.Now().Add(time.Minute)
 		return value, expireAt, nil
 	}
 
@@ -47,8 +47,4 @@ func Example() {
 	// Value for 'three' (loaded): 50
 	// Value for 'three' (from cache): 50
 	// Cache stats: 0.75
-}
-
-func ptrTime(t time.Time) *time.Time {
-	return &t
 }

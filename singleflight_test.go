@@ -213,7 +213,7 @@ func TestGroup_Do_ConcurrentCalls2(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	const n = 1000
+	const n = 3000
 	results := make([]string, n)
 	loaderCalled := make([]bool, n)
 	errors := make([]error, n)
@@ -226,6 +226,54 @@ func TestGroup_Do_ConcurrentCalls2(t *testing.T) {
 		}(i)
 	}
 
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		if errors[i] != nil {
+			t.Fatalf("unexpected error: %v", errors[i])
+		}
+		if results[i] != "value" {
+			t.Fatalf("expected value 'value', got %v", results[i])
+		}
+	}
+
+	// Only one call should have actually called the loader
+	loaderCallCount := 0
+	for _, called := range loaderCalled {
+		if called {
+			loaderCallCount++
+		}
+	}
+	if loaderCallCount != 1 {
+		t.Fatalf("expected loader to be called once, but was called %d times", loaderCallCount)
+	}
+}
+
+// Test concurrent calls with the same key
+func TestGroup_Do_ConcurrentCalls3(t *testing.T) {
+	g := NewGroup[string, string]()
+	loader := func(key string, ctx context.Context) (string, error) {
+		time.Sleep(100 * time.Millisecond)
+		return "value", nil
+	}
+
+	var wg sync.WaitGroup
+	const n = 2000
+	results := make([]string, n)
+	loaderCalled := make([]bool, n)
+	errors := make([]error, n)
+	startSignal := make(chan struct{})
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-startSignal
+			results[i], loaderCalled[i], errors[i] = g.Do("key", loader, context.Background())
+		}(i)
+	}
+
+	close(startSignal)
 	wg.Wait()
 
 	for i := 0; i < n; i++ {

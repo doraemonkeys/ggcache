@@ -27,7 +27,7 @@ func TestSimpleCache_SetWithExpire(t *testing.T) {
 	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
 	expireTime := time.Now().Add(2 * time.Second)
-	cache.SetWithExpire("key1", 200, &expireTime)
+	cache.SetWithExpire("key1", 200, expireTime)
 
 	value, ok := cache.Get("key1")
 	assert.True(t, ok)
@@ -53,9 +53,9 @@ func TestSimpleCache_Remove(t *testing.T) {
 func TestSimpleCache_GetOrReload(t *testing.T) {
 	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
 		expireTime := time.Now().Add(2 * time.Second)
-		return 400, &expireTime, nil
+		return 400, expireTime, nil
 	}
 
 	value, err := cache.GetOrReload(context.Background(), "key1", loader)
@@ -152,7 +152,7 @@ func TestSimpleCache_Expiration(t *testing.T) {
 
 	// Set item with expiration
 	expireAt := clock.Now().Add(time.Second * 5)
-	cache.SetWithExpire("key", 100, &expireAt)
+	cache.SetWithExpire("key", 100, expireAt)
 
 	// Check before expiration
 	value, ok := cache.Get("key")
@@ -166,7 +166,7 @@ func TestSimpleCache_Expiration(t *testing.T) {
 	assert.Equal(t, 0, value)
 
 	// Test GetWithExpire
-	cache.SetWithExpire("key2", 200, &expireAt)
+	cache.SetWithExpire("key2", 200, expireAt)
 	_, _, ok = cache.GetWithExpire("key2")
 	assert.True(t, !ok)
 }
@@ -178,8 +178,8 @@ func TestSimpleCache_BatchOperations(t *testing.T) {
 	now := time.Now()
 	expireAt1 := now.Add(time.Second * 5)
 	expireAt2 := now.Add(time.Second * 10)
-	cache.SetWithExpire("key1", 100, &expireAt1)
-	cache.SetWithExpire("key2", 200, &expireAt2)
+	cache.SetWithExpire("key1", 100, expireAt1)
+	cache.SetWithExpire("key2", 200, expireAt2)
 	cache.Set("key3", 300)
 
 	// Test GetAllMap
@@ -235,10 +235,10 @@ func TestSimpleCache_ConcurrentAccess(t *testing.T) {
 func TestSimpleCache_GetOrReload2(t *testing.T) {
 	cache := ggcache.NewSimpleBuilder[string, int]().Build()
 
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
 		value := len(key)
 		expireAt := time.Now().Add(time.Second * 5)
-		return value, &expireAt, nil
+		return value, expireAt, nil
 	}
 
 	// Test getting a non-existent key
@@ -252,8 +252,8 @@ func TestSimpleCache_GetOrReload2(t *testing.T) {
 	assert.Equal(t, 4, value)
 
 	// Test with a loader that returns an error
-	errorLoader := func(key string, ctx context.Context) (int, *time.Time, error) {
-		return 0, nil, fmt.Errorf("loader error")
+	errorLoader := func(key string, ctx context.Context) (int, time.Time, error) {
+		return 0, time.Time{}, fmt.Errorf("loader error")
 	}
 	_, err = cache.GetOrReload(context.Background(), "error", errorLoader)
 	assert.Error(t, err)

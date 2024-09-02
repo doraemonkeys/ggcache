@@ -11,7 +11,7 @@ import (
 
 type (
 	LoaderFunc[K comparable, V any]       func(K, context.Context) (V, error)
-	LoaderExpireFunc[K comparable, V any] func(K, context.Context) (V, *time.Time, error)
+	LoaderExpireFunc[K comparable, V any] func(K, context.Context) (V, time.Time, error)
 	// EvictedFunc[K comparable, V any]      func(K, V)
 	// PurgeVisitorFunc[K comparable, V any] func(K, V)
 	// AddedFunc[K comparable, V any]        func(K, V)
@@ -19,39 +19,39 @@ type (
 	// SerializeFunc[K comparable, V any]    func(K, V) (V, error)
 )
 
-type Cacher[K comparable, V any] interface {
-	// Set inserts or updates the specified key-value pair.
-	Set(key K, value V)
-	// SetWithExpire inserts or updates the specified key-value pair with an expiration time.
-	SetWithExpire(key K, value V, expireAt *time.Time)
-	// Get returns the value for the specified key if it is present in the cache.
-	Get(key K) (V, bool)
-	// GetWithExpire returns the value and the expiration time for the specified key if it is present in the cache.
-	GetWithExpire(key K) (V, *time.Time, bool)
+// type Cacher[K comparable, V any] interface {
+// 	// Set inserts or updates the specified key-value pair.
+// 	Set(key K, value V)
+// 	// SetWithExpire inserts or updates the specified key-value pair with an expiration time.
+// 	SetWithExpire(key K, value V, expireAt *time.Time)
+// 	// Get returns the value for the specified key if it is present in the cache.
+// 	Get(key K) (V, bool)
+// 	// GetWithExpire returns the value and the expiration time for the specified key if it is present in the cache.
+// 	GetWithExpire(key K) (V, *time.Time, bool)
 
-	GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool)
+// 	GetAndRefreshExpire(key K, expireAt *time.Time) (V, bool)
 
-	GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error)
+// 	GetOrReload(key K, loader LoaderExpireFunc[K, V], ctx context.Context) (V, error)
 
-	// GetAll returns a slice containing all key-value pairs in the cache.
-	GetAll() ([]K, []V)
-	// GetAllMap returns a map containing all key-value pairs in the cache.
-	GetAllMap() map[K]V
+// 	// GetAll returns a slice containing all key-value pairs in the cache.
+// 	GetAll() ([]K, []V)
+// 	// GetAllMap returns a map containing all key-value pairs in the cache.
+// 	GetAllMap() map[K]V
 
-	// Remove removes the specified key from the cache if the key is present.
-	// Returns true if the key was present and the key has been deleted.
-	Remove(key K) (V, bool)
-	// Purge removes all key-value pairs from the cache.
-	Purge()
-	// Keys returns a slice containing all keys in the cache.
-	Keys() []K
-	// Len returns the number of items in the cache.
-	Len() int
-	// Has returns true if the key exists in the cache.
-	Has(key K) bool
+// 	// Remove removes the specified key from the cache if the key is present.
+// 	// Returns true if the key was present and the key has been deleted.
+// 	Remove(key K) (V, bool)
+// 	// Purge removes all key-value pairs from the cache.
+// 	Purge()
+// 	// Keys returns a slice containing all keys in the cache.
+// 	Keys() []K
+// 	// Len returns the number of items in the cache.
+// 	Len() int
+// 	// Has returns true if the key exists in the cache.
+// 	Has(key K) bool
 
-	statsAccessor
-}
+// 	statsAccessor
+// }
 
 var (
 	ErrorCacheEmpty = errors.New("cache is empty")
@@ -167,12 +167,12 @@ type CacheValue[V any] struct {
 	// Change expireAt will cause the inconsistency of the expiration priority queue,
 	// resulting in expired keys may not be deleted in time.
 	// So, change expireAt should hold the lock to avoid removing the expired keys by the removeExpired method.
-	expireAt *time.Time
+	expireAt time.Time
 	deleted  bool
 }
 
 func (c *CacheValue[V]) IsExpired(now time.Time) bool {
-	return c.expireAt != nil && now.After(*c.expireAt)
+	return !c.expireAt.IsZero() && now.After(c.expireAt)
 }
 
 type CacheItem[K comparable, V any] struct {
@@ -181,17 +181,17 @@ type CacheItem[K comparable, V any] struct {
 }
 
 func cacheItemExpireCompare[K1 comparable, K2 comparable, V1, V2 any](a CacheItem[K1, V1], b CacheItem[K2, V2]) int {
-	if a.expireAt == nil {
-		if b.expireAt != nil {
+	if a.expireAt.IsZero() {
+		if !b.expireAt.IsZero() {
 			return 1
 		}
 		return 0
-	} else if b.expireAt == nil {
+	} else if b.expireAt.IsZero() {
 		return -1
 	}
-	if a.expireAt.After(*b.expireAt) {
+	if a.expireAt.After(b.expireAt) {
 		return 1
-	} else if a.expireAt.Before(*b.expireAt) {
+	} else if a.expireAt.Before(b.expireAt) {
 		return -1
 	} else {
 		return 0

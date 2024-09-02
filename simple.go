@@ -60,24 +60,26 @@ func (b *SimpleCacheBuilder[K, V]) Build() *SimpleCache[K, V] {
 
 // Set inserts or updates the specified key-value pair.
 func (s *SimpleCache[K, V]) Set(key K, value V) {
-	s.SetWithExpire(key, value, nil)
+	s.SetWithExpire(key, value, time.Time{})
 }
 
 // SetWithExpire inserts or updates the specified key-value pair with an expiration time.
-func (s *SimpleCache[K, V]) SetWithExpire(key K, value V, expireAt *time.Time) {
+// If expireAt is zero, the item will never expire.
+func (s *SimpleCache[K, V]) SetWithExpire(key K, value V, expireAt time.Time) {
 	var val = &CacheValue[V]{value: value, expireAt: expireAt}
 	s.set(key, val)
 }
 
 // set adds or updates a cache entry and manages expiration.
 func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
-	needInsertToExpireQueue := val.expireAt != nil
+	// needInsertToExpireQueue := val.expireAt != nil
+	needInsertToExpireQueue := !val.expireAt.IsZero()
 	s.itemsMu.Lock()
 	old, exists := s.items[key]
 	if exists {
-		if val.expireAt == nil {
+		if val.expireAt.IsZero() {
 			needInsertToExpireQueue = false
-		} else if old.expireAt != nil && val.expireAt.Equal(*old.expireAt) {
+		} else if val.expireAt.Equal(old.expireAt) {
 			needInsertToExpireQueue = false
 		} else {
 			needInsertToExpireQueue = true
@@ -95,20 +97,20 @@ func (s *SimpleCache[K, V]) set(key K, val *CacheValue[V]) {
 	}
 }
 
-func (s *SimpleCache[K, V]) GetRefresh(key K, expireAt *time.Time) (V, bool) {
+func (s *SimpleCache[K, V]) GetRefresh(key K, expireAt time.Time) (V, bool) {
 	return s.getRefresh(key, expireAt, true)
 }
 
-func (s *SimpleCache[K, V]) getRefresh(key K, expireAt *time.Time, setMissCount bool) (V, bool) {
-	needInsertToExpireQueue := expireAt != nil
+func (s *SimpleCache[K, V]) getRefresh(key K, expireAt time.Time, setMissCount bool) (V, bool) {
+	needInsertToExpireQueue := !expireAt.IsZero()
 	var ok = false
 	s.itemsMu.RLock()
 	old, exists := s.items[key]
 	if exists && !old.IsExpired(s.clock.Now()) {
 		ok = true
-		if expireAt == nil {
+		if expireAt.IsZero() {
 			needInsertToExpireQueue = false
-		} else if old.expireAt != nil && expireAt.Equal(*old.expireAt) {
+		} else if expireAt.Equal(old.expireAt) {
 			needInsertToExpireQueue = false
 		} else {
 			needInsertToExpireQueue = true
@@ -142,18 +144,18 @@ func (s *SimpleCache[K, V]) Get(key K) (V, bool) {
 }
 
 // GetWithExpire retrieves a value and its expiration by key.
-func (s *SimpleCache[K, V]) GetWithExpire(key K) (V, *time.Time, bool) {
+func (s *SimpleCache[K, V]) GetWithExpire(key K) (V, time.Time, bool) {
 	var item *CacheValue[V]
 	s.itemsMu.RLock()
 	item, ok := s.items[key]
 	s.itemsMu.RUnlock()
 	if !ok {
 		s.incrMissCount()
-		return *new(V), nil, false
+		return *new(V), time.Time{}, false
 	}
 	if item.IsExpired(s.clock.Now()) {
 		s.incrMissCount()
-		return *new(V), nil, false
+		return *new(V), time.Time{}, false
 	}
 	s.incrHitCount()
 	return item.value, item.expireAt, true
@@ -174,7 +176,7 @@ func (s *SimpleCache[K, V]) GetOrReload(ctx context.Context, key K, loader Loade
 	return s.reloadOrWait(key, loader, ctx)
 }
 
-func (s *SimpleCache[K, V]) GetRefreshOrReload(ctx context.Context, key K, refreshExpireAt *time.Time, loader LoaderExpireFunc[K, V]) (V, error) {
+func (s *SimpleCache[K, V]) GetRefreshOrReload(ctx context.Context, key K, refreshExpireAt time.Time, loader LoaderExpireFunc[K, V]) (V, error) {
 	v, ok := s.getRefresh(key, refreshExpireAt, false)
 	if ok {
 		s.incrHitCount()

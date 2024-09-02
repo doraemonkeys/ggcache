@@ -31,12 +31,12 @@ func TestSimpleCache(t *testing.T) {
 
 	// 测试 SetWithExpire 和 GetWithExpire
 	expireTime := time.Now().Add(50 * time.Millisecond)
-	cache.SetWithExpire("key2", 200, &expireTime)
+	cache.SetWithExpire("key2", 200, expireTime)
 
 	value, expiryTime, ok := cache.GetWithExpire("key2")
 	assert.True(t, ok)
 	assert.Equal(t, 200, value)
-	assert.Equal(t, expireTime, *expiryTime)
+	assert.Equal(t, expireTime, expiryTime)
 	_, _, ok = cache.GetWithExpire("key_non_existent")
 	assert.False(t, ok)
 
@@ -53,8 +53,8 @@ func TestSimpleCache(t *testing.T) {
 	assert.False(t, ok)
 
 	// 测试 GetOrReload
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
-		return 400, nil, nil
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
+		return 400, time.Time{}, nil
 	}
 	value, err := cache.GetOrReload(context.Background(), "key4", loader)
 	assert.NoError(t, err)
@@ -97,7 +97,7 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 			go func(i int) {
 				defer wg.Done()
 				expireAt := time.Now().Add(time.Millisecond * time.Duration(rand.IntN(100)))
-				cache.SetWithExpire(i, i*2, &expireAt)
+				cache.SetWithExpire(i, i*2, expireAt)
 				time.Sleep(time.Millisecond * time.Duration(rand.IntN(150)))
 				_, _ = cache.Get(i)
 				// We don't check the value here because it may or may not have expired
@@ -110,8 +110,8 @@ func TestSimpleCacheConcurrent(t *testing.T) {
 	t.Run("Concurrent Get or Reload", func(t *testing.T) {
 		cache := NewSimpleBuilder[int, int]().Build()
 		var wg sync.WaitGroup
-		loader := func(key int, ctx context.Context) (int, *time.Time, error) {
-			return key * 3, nil, nil
+		loader := func(key int, ctx context.Context) (int, time.Time, error) {
+			return key * 3, time.Time{}, nil
 		}
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
@@ -197,9 +197,9 @@ func TestSimpleCacheConcurrentSetWithExpireAndGet(t *testing.T) {
 			defer wg.Done()
 			key := fmt.Sprintf("key%d", i)
 			expireAt := time.Now().Add(time.Hour)
-			cache.SetWithExpire(key, i, &expireAt)
+			cache.SetWithExpire(key, i, expireAt)
 			value, exp, ok := cache.GetWithExpire(key)
-			if !ok || value != i || exp == nil || !exp.Equal(expireAt) {
+			if !ok || value != i || exp.IsZero() || !exp.Equal(expireAt) {
 				t.Errorf("Unexpected result for key %s: (%d, %v, %v)", key, value, exp, ok)
 			}
 		}(i)
@@ -214,9 +214,9 @@ func TestSimpleCacheConcurrentGetOrReload(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
 		value := len(key)
-		return value, nil, nil
+		return value, time.Time{}, nil
 	}
 
 	for i := 0; i < goroutines; i++ {
@@ -353,7 +353,7 @@ func TestSimpleCache_ConcurrentExpiration(t *testing.T) {
 		key := fmt.Sprintf("key-%d", i)
 		value := rand.IntN(1000)
 		expireAt := time.Now().Add(time.Duration(rand.Int64N(int64(expirationRange))))
-		cache.SetWithExpire(key, value, &expireAt)
+		cache.SetWithExpire(key, value, expireAt)
 	}
 
 	start := time.Now()
@@ -383,11 +383,11 @@ func TestSimpleCache_ConcurrentLoadAndCache(t *testing.T) {
 		testDuration  = 10 * time.Second
 	)
 
-	loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+	loader := func(key string, ctx context.Context) (int, time.Time, error) {
 		time.Sleep(10 * time.Millisecond) // Simulate some work
 		value := rand.IntN(1000)
 		expireAt := time.Now().Add(5 * time.Second)
-		return value, &expireAt, nil
+		return value, expireAt, nil
 	}
 
 	var wg sync.WaitGroup
@@ -431,20 +431,20 @@ func TestSimpleCache_Set(t *testing.T) {
 
 	t.Run("Set with expiration", func(t *testing.T) {
 		expireAt := clock.Now().Add(time.Hour)
-		cache.SetWithExpire("key2", 300, &expireAt)
+		cache.SetWithExpire("key2", 300, expireAt)
 		value, expire, ok := cache.GetWithExpire("key2")
 		assert.True(t, ok)
 		assert.Equal(t, 300, value)
-		assert.Equal(t, expireAt, *expire)
+		assert.Equal(t, expireAt, expire)
 	})
 
 	t.Run("Update existing key with new expiration", func(t *testing.T) {
 		expireAt := clock.Now().Add(2 * time.Hour)
-		cache.SetWithExpire("key2", 400, &expireAt)
+		cache.SetWithExpire("key2", 400, expireAt)
 		value, expire, ok := cache.GetWithExpire("key2")
 		assert.True(t, ok)
 		assert.Equal(t, 400, value)
-		assert.Equal(t, expireAt, *expire)
+		assert.Equal(t, expireAt, expire)
 	})
 
 	t.Run("Remove expiration from existing key", func(t *testing.T) {
@@ -452,12 +452,12 @@ func TestSimpleCache_Set(t *testing.T) {
 		value, expire, ok := cache.GetWithExpire("key2")
 		assert.True(t, ok)
 		assert.Equal(t, 500, value)
-		assert.Nil(t, expire)
+		assert.True(t, expire.IsZero())
 	})
 
 	t.Run("Expired key handling", func(t *testing.T) {
 		expireAt := clock.Now().Add(time.Minute)
-		cache.SetWithExpire("key3", 600, &expireAt)
+		cache.SetWithExpire("key3", 600, expireAt)
 
 		// Verify key exists before expiration
 		value, ok := cache.Get("key3")
@@ -474,7 +474,7 @@ func TestSimpleCache_Set(t *testing.T) {
 
 	t.Run("Set after expiration", func(t *testing.T) {
 		expireAt := clock.Now().Add(-time.Minute) // Expired 1 minute ago
-		cache.SetWithExpire("key4", 700, &expireAt)
+		cache.SetWithExpire("key4", 700, expireAt)
 
 		// Verify key is not accessible due to immediate expiration
 		_, ok := cache.Get("key4")
@@ -496,22 +496,22 @@ func TestSimpleCache_Set(t *testing.T) {
 		expireAt := clock.Now().Add(time.Hour)
 
 		// First set
-		cache.SetWithExpire("key5", 900, &expireAt)
+		cache.SetWithExpire("key5", 900, expireAt)
 
 		// Get the initial value and verify
 		value, expire, ok := cache.GetWithExpire("key5")
 		assert.True(t, ok)
 		assert.Equal(t, 900, value)
-		assert.Equal(t, expireAt, *expire)
+		assert.Equal(t, expireAt, expire)
 
 		// Set again with the same expiration time
-		cache.SetWithExpire("key5", 1000, &expireAt)
+		cache.SetWithExpire("key5", 1000, expireAt)
 
 		// Verify the value is updated but expiration time remains the same
 		value, newExpire, ok := cache.GetWithExpire("key5")
 		assert.True(t, ok)
 		assert.Equal(t, 1000, value)
-		assert.Equal(t, expireAt, *newExpire)
+		assert.Equal(t, expireAt, newExpire)
 
 		// Verify that the expiration queue wasn't unnecessarily modified
 		// This is an internal implementation detail, so we need to be careful about testing it
@@ -547,7 +547,7 @@ func TestSimpleCache2(t *testing.T) {
 	t.Run("SetWithExpire and GetWithExpire", func(t *testing.T) {
 		cache := NewSimpleBuilder[string, int]().Build()
 		expireAt := time.Now().Add(time.Hour)
-		cache.SetWithExpire("key1", 100, &expireAt)
+		cache.SetWithExpire("key1", 100, expireAt)
 
 		value, expire, ok := cache.GetWithExpire("key1")
 		assert.True(t, ok)
@@ -557,8 +557,8 @@ func TestSimpleCache2(t *testing.T) {
 
 	t.Run("GetOrReload", func(t *testing.T) {
 		cache := NewSimpleBuilder[string, int]().Build()
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
-			return 200, nil, nil
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
+			return 200, time.Time{}, nil
 		}
 
 		value, err := cache.GetOrReload(context.Background(), "key1", loader)
@@ -601,7 +601,7 @@ func TestSimpleCache2(t *testing.T) {
 			Build()
 
 		expireAt := mockClock.Now().Add(time.Hour)
-		cache.SetWithExpire("key1", 100, &expireAt)
+		cache.SetWithExpire("key1", 100, expireAt)
 
 		// Advance time beyond expiration
 		mockClock.Advance(2 * time.Hour)
@@ -621,7 +621,7 @@ func TestSimpleCache_RemoveBeforeExpiration(t *testing.T) {
 
 	// 设置一个10秒后过期的键值对
 	expireAt := mockClock.Now().Add(3 * time.Second)
-	cache.SetWithExpire("key1", 100, &expireAt)
+	cache.SetWithExpire("key1", 100, expireAt)
 
 	// 确保键值对被正确设置
 	value, ok := cache.Get("key1")
@@ -669,12 +669,12 @@ func TestSimpleCache3(t *testing.T) {
 
 	t.Run("SetWithExpire and GetWithExpire", func(t *testing.T) {
 		expireAt := time.Now().Add(time.Hour)
-		cache.SetWithExpire("key2", 200, &expireAt)
+		cache.SetWithExpire("key2", 200, expireAt)
 
 		value, expirationTime, ok := cache.GetWithExpire("key2")
 		assert.True(t, ok)
 		assert.Equal(t, 200, value)
-		assert.Equal(t, &expireAt, expirationTime)
+		assert.Equal(t, expireAt, expirationTime)
 	})
 
 	t.Run("Remove", func(t *testing.T) {
@@ -699,8 +699,8 @@ func TestSimpleCache3(t *testing.T) {
 	})
 
 	t.Run("GetOrReload", func(t *testing.T) {
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
-			return 600, nil, nil
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
+			return 600, time.Time{}, nil
 		}
 
 		value, err := cache.GetOrReload(context.Background(), "key6", loader)
@@ -737,7 +737,7 @@ func TestSimpleCache3(t *testing.T) {
 		cache = NewSimpleBuilder[string, int]().Clock(mockClock).Build()
 
 		expireAt := mockClock.Now().Add(time.Hour)
-		cache.SetWithExpire("key9", 900, &expireAt)
+		cache.SetWithExpire("key9", 900, expireAt)
 
 		// Before expiration
 		value, ok := cache.Get("key9")
@@ -810,10 +810,10 @@ func TestSimpleCache3(t *testing.T) {
 	t.Run("GetOrReload with multiple calls", func(t *testing.T) {
 		cache := NewSimpleBuilder[string, int]().Build()
 		loadCount := 0
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
 			loadCount++
 			time.Sleep(200 * time.Millisecond)
-			return 100, nil, nil
+			return 100, time.Time{}, nil
 		}
 
 		var wg sync.WaitGroup
@@ -851,7 +851,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 
 	// 测试用例1: 缓存未命中
 	t.Run("Cache Miss", func(t *testing.T) {
-		value, ok := cache.GetRefresh("key1", nil)
+		value, ok := cache.GetRefresh("key1", time.Time{})
 		assert.False(t, ok)
 		assert.Equal(t, 0, value)
 		assert.Equal(t, uint64(1), cache.MissCount())
@@ -860,7 +860,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 	// 测试用例2: 设置值后缓存命中
 	t.Run("Cache Hit After Set", func(t *testing.T) {
 		cache.Set("key2", 100)
-		value, ok := cache.GetRefresh("key2", nil)
+		value, ok := cache.GetRefresh("key2", time.Time{})
 		assert.True(t, ok)
 		assert.Equal(t, 100, value)
 		assert.Equal(t, uint64(1), cache.HitCount())
@@ -870,48 +870,48 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 	t.Run("Refresh Expire Time", func(t *testing.T) {
 		now := mockClock.Now()
 		expireAt := now.Add(time.Hour)
-		cache.SetWithExpire("key3", 200, &expireAt)
+		cache.SetWithExpire("key3", 200, expireAt)
 
 		// 刷新过期时间
 		newExpireAt := now.Add(2 * time.Hour)
-		value, ok := cache.GetRefresh("key3", &newExpireAt)
+		value, ok := cache.GetRefresh("key3", newExpireAt)
 		assert.True(t, ok)
 		assert.Equal(t, 200, value)
 
 		// 验证过期时间已更新
 		_, expireTime, exists := cache.GetWithExpire("key3")
 		assert.True(t, exists)
-		assert.Equal(t, newExpireAt, *expireTime)
+		assert.Equal(t, newExpireAt, expireTime)
 	})
 
 	// 测试用例4: 移除过期时间
 	t.Run("Remove Expire Time", func(t *testing.T) {
 		now := mockClock.Now()
 		expireAt := now.Add(time.Hour)
-		cache.SetWithExpire("key4", 300, &expireAt)
+		cache.SetWithExpire("key4", 300, expireAt)
 
 		// 移除过期时间
-		value, ok := cache.GetRefresh("key4", nil)
+		value, ok := cache.GetRefresh("key4", time.Time{})
 		assert.True(t, ok)
 		assert.Equal(t, 300, value)
 
 		// 验证过期时间已被移除
 		_, expireTime, exists := cache.GetWithExpire("key4")
 		assert.True(t, exists)
-		assert.Nil(t, expireTime)
+		assert.True(t, expireTime.IsZero())
 	})
 
 	// 测试用例5: 过期项的处理
 	t.Run("Expired Item", func(t *testing.T) {
 		now := mockClock.Now()
 		expireAt := now.Add(time.Hour)
-		cache.SetWithExpire("key5", 400, &expireAt)
+		cache.SetWithExpire("key5", 400, expireAt)
 
 		// 模拟时间流逝，使项目过期
 		mockClock.Advance(2 * time.Hour)
 
 		// 尝试获取过期项
-		value, ok := cache.GetRefresh("key5", nil)
+		value, ok := cache.GetRefresh("key5", time.Time{})
 		assert.False(t, ok)
 		assert.Equal(t, 0, value)
 		assert.Equal(t, uint64(2), cache.MissCount())
@@ -921,17 +921,17 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 	t.Run("Refresh With Same Expire Time", func(t *testing.T) {
 		now := mockClock.Now()
 		expireAt := now.Add(time.Hour)
-		cache.SetWithExpire("key6", 500, &expireAt)
+		cache.SetWithExpire("key6", 500, expireAt)
 
 		// 使用相同的过期时间刷新
-		value, ok := cache.GetRefresh("key6", &expireAt)
+		value, ok := cache.GetRefresh("key6", expireAt)
 		assert.True(t, ok)
 		assert.Equal(t, 500, value)
 
 		// 验证过期时间未变
 		_, actualExpireTime, exists := cache.GetWithExpire("key6")
 		assert.True(t, exists)
-		assert.Equal(t, expireAt, *actualExpireTime)
+		assert.Equal(t, expireAt, actualExpireTime)
 	})
 
 	// 测试用例7: 并发访问
@@ -943,7 +943,7 @@ func TestSimpleCache_GetRefreshExpire(t *testing.T) {
 			go func(index int) {
 				key := fmt.Sprintf("concurrent_key_%d", index)
 				cache.Set(key, index)
-				value, ok := cache.GetRefresh(key, nil)
+				value, ok := cache.GetRefresh(key, time.Time{})
 				assert.True(t, ok)
 				assert.Equal(t, index, value)
 				done <- true
@@ -961,9 +961,9 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 		clock := NewFakeClock()
 		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 		expireAt := clock.Now().Add(time.Hour)
-		cache.SetWithExpire("key", 42, &expireAt)
+		cache.SetWithExpire("key", 42, expireAt)
 
-		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, nil)
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", time.Time{}, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 42, result)
@@ -975,10 +975,10 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 		clock := NewFakeClock()
 		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 		oldExpireAt := clock.Now().Add(time.Hour)
-		cache.SetWithExpire("key", 42, &oldExpireAt)
+		cache.SetWithExpire("key", 42, oldExpireAt)
 
 		newExpireAt := clock.Now().Add(2 * time.Hour)
-		result, err := cache.GetRefreshOrReload(context.Background(), "key", &newExpireAt, nil)
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", newExpireAt, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 42, result)
@@ -987,19 +987,19 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 
 		// Verify the expiration time was updated
 		_, expireTime, _ := cache.GetWithExpire("key")
-		assert.Equal(t, newExpireAt, *expireTime)
+		assert.Equal(t, newExpireAt, expireTime)
 	})
 
 	t.Run("cache miss and load", func(t *testing.T) {
 		clock := NewFakeClock()
 		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
 			expireAt := clock.Now().Add(time.Hour)
-			return 100, &expireAt, nil
+			return 100, expireAt, nil
 		}
 
-		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", time.Time{}, loader)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 100, result)
@@ -1016,11 +1016,11 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 		clock := NewFakeClock()
 		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
-			return 0, nil, fmt.Errorf("load error")
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
+			return 0, time.Time{}, fmt.Errorf("load error")
 		}
 
-		result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+		result, err := cache.GetRefreshOrReload(context.Background(), "key", time.Time{}, loader)
 
 		assert.Error(t, err)
 		assert.Equal(t, "load error", err.Error())
@@ -1038,11 +1038,11 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 		cache := NewSimpleBuilder[string, int]().Clock(clock).Build()
 
 		loadCount := 0
-		loader := func(key string, ctx context.Context) (int, *time.Time, error) {
+		loader := func(key string, ctx context.Context) (int, time.Time, error) {
 			loadCount++
 			time.Sleep(10 * time.Millisecond) // Simulate some work
 			expireAt := clock.Now().Add(time.Hour)
-			return 200, &expireAt, nil
+			return 200, expireAt, nil
 		}
 
 		const concurrentRequests = 10
@@ -1051,7 +1051,7 @@ func TestSimpleCache_GetRefreshOrReload(t *testing.T) {
 
 		for i := 0; i < concurrentRequests; i++ {
 			go func() {
-				result, err := cache.GetRefreshOrReload(context.Background(), "key", nil, loader)
+				result, err := cache.GetRefreshOrReload(context.Background(), "key", time.Time{}, loader)
 				if err != nil {
 					errors <- err
 				} else {
