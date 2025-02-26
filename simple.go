@@ -11,8 +11,9 @@ import (
 // SimpleCache has no clear priority for evict cache. It depends on key-value map order.
 type SimpleCache[K comparable, V any] struct {
 	BaseCache[K, V]
-	items   map[K]*CacheValue[V]
-	itemsMu sync.RWMutex
+	items    map[K]*CacheValue[V]
+	itemsMu  sync.RWMutex
+	onDelete func(key K, value V, expireAt time.Time)
 }
 
 // SimpleCacheBuilder helps configure and build a SimpleCache.
@@ -20,6 +21,7 @@ type SimpleCacheBuilder[K comparable, V any] struct {
 	initSize              int
 	deleteExpiredInterval time.Duration
 	clock                 Clock
+	onDelete              func(key K, value V, expireAt time.Time)
 }
 
 // NewSimpleBuilder creates a new builder with default settings.
@@ -49,12 +51,18 @@ func (b *SimpleCacheBuilder[K, V]) Clock(clock Clock) *SimpleCacheBuilder[K, V] 
 	return b
 }
 
+func (b *SimpleCacheBuilder[K, V]) OnDelete(onDelete func(key K, value V, expireAt time.Time)) *SimpleCacheBuilder[K, V] {
+	b.onDelete = onDelete
+	return b
+}
+
 // Build constructs the SimpleCache with the configured settings.
 func (b *SimpleCacheBuilder[K, V]) Build() *SimpleCache[K, V] {
 	c := &SimpleCache[K, V]{}
 	c.items = make(map[K]*CacheValue[V], b.initSize)
 	c.BaseCache = *newBaseCache[K, V](c.batchRemoveExpired).
 		withClock(b.clock).withTickerDuration(b.deleteExpiredInterval)
+	c.onDelete = b.onDelete
 	return c
 }
 
@@ -241,8 +249,13 @@ func (s *SimpleCache[K, V]) GetAll() ([]K, []V) {
 // Remove deletes a key from the cache, returning the value and whether it was found.
 func (s *SimpleCache[K, V]) Remove(key K) (V, bool) {
 	s.itemsMu.Lock()
-	defer s.itemsMu.Unlock()
 	val, ok := s.items[key]
+	defer func() {
+		s.itemsMu.Unlock()
+		if ok && s.onDelete != nil {
+			s.onDelete(key, val.value, val.expireAt)
+		}
+	}()
 	if ok {
 		delete(s.items, key)
 		val.deleted = true
@@ -257,14 +270,28 @@ func (s *SimpleCache[K, V]) RemoveBatch(keys []K) {
 		return
 	}
 	s.itemsMu.Lock()
-	defer s.itemsMu.Unlock()
+	var onDeletes []func()
+	if s.onDelete != nil {
+		onDeletes = make([]func(), 0, len(keys))
+	}
 	var val *CacheValue[V]
 	var ok bool
+	defer func() {
+		s.itemsMu.Unlock()
+		for _, onDelete := range onDeletes {
+			onDelete()
+		}
+	}()
 	for _, k := range keys {
 		val, ok = s.items[k]
 		if ok {
 			delete(s.items, k)
 			val.deleted = true
+			if s.onDelete != nil {
+				onDeletes = append(onDeletes, func() {
+					s.onDelete(k, val.value, val.expireAt)
+				})
+			}
 		}
 	}
 }
@@ -276,14 +303,28 @@ func (s *SimpleCache[K, V]) batchRemoveExpired(keys []K) {
 	}
 	now := s.clock.Now()
 	s.itemsMu.Lock()
-	defer s.itemsMu.Unlock()
+	var onDeletes []func()
+	if s.onDelete != nil {
+		onDeletes = make([]func(), 0, len(keys))
+	}
 	var val *CacheValue[V]
 	var ok bool
+	defer func() {
+		s.itemsMu.Unlock()
+		for _, onDelete := range onDeletes {
+			onDelete()
+		}
+	}()
 	for _, k := range keys {
 		val, ok = s.items[k]
 		if ok && val.IsExpired(now) {
 			delete(s.items, k)
 			val.deleted = true
+			if s.onDelete != nil {
+				onDeletes = append(onDeletes, func() {
+					s.onDelete(k, val.value, val.expireAt)
+				})
+			}
 		}
 	}
 }

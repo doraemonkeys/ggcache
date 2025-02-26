@@ -77,7 +77,7 @@ type BaseCache[K comparable, V any] struct {
 	// expiration *time.Duration
 
 	// The priority queue is used to determine the priority by expireAt.
-	expireQueue   *pq.PriorityQueue[CacheItem[K, V]]
+	expireQueue   *pq.PQueue[CacheItem[K, V]]
 	expireQueueMu sync.Mutex
 	// Removes only the expired keys from the cache.
 	removeExpireKeys func([]K)
